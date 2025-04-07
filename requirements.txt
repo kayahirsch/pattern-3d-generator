@@ -1,0 +1,4 @@
+flask
+svgwrite
+trimesh
+numpy
