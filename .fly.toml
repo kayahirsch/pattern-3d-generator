@@ -1,2 +1,3 @@
+# .fly.toml
 [build]
-  builder = "paketobuildpacks/builder:base"
+  image = "python:3.11"
