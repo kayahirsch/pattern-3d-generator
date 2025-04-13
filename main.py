@@ -12,16 +12,25 @@ def index():
 
 @app.route("/generate-pattern", methods=["POST"])
 def generate():
-    data = request.get_json()
-    object_list = data.get("objects", [])
-    include_straps = data.get("include_straps", False)
-
     try:
+        if request.is_json:
+            # JSON API call
+            data = request.get_json()
+            object_list = data.get("objects", [])
+            include_straps = data.get("include_straps", False)
+        else:
+            # HTML form submission
+            object_list = request.form.getlist("objects")
+            include_straps = bool(request.form.get("include_straps"))
+
+        # Generate SVG pattern
         output_path = generate_pattern_svg(object_list, include_straps)
-        return jsonify({"svg_url": "/download-pattern"})
+        return send_file(output_path, as_attachment=True)
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# Optional separate download route
 @app.route("/download-pattern")
 def download():
     return send_file(os.path.join(OUTPUT_DIR, "pattern.svg"), as_attachment=True)
