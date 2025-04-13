@@ -1,10 +1,22 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Pattern Generator</title>
+  <title>3D-to-2D Pattern Generator</title>
 </head>
 <body>
-    <h1>Welcome to the 3D Pattern Generator API!</h1>
-    <p>You can POST to <code>/generate-pattern</code> with your object list.</p>
+  <h1>🧵 Generate Your Custom Bag Pattern</h1>
+  <form action="/generate-pattern" method="post">
+    <label>Select items to include:</label><br>
+    <input type="checkbox" name="objects" value="phone"> Phone<br>
+    <input type="checkbox" name="objects" value="book"> Book<br>
+    <input type="checkbox" name="objects" value="lipstick"> Lipstick<br>
+    <input type="checkbox" name="objects" value="journal"> Journal<br><br>
+
+    <label>
+      <input type="checkbox" name="include_straps"> Include straps
+    </label><br><br>
+
+    <input type="submit" value="Generate Pattern">
+  </form>
 </body>
 </html>
