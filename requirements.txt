@@ -3,3 +3,4 @@ svgwrite
 trimesh
 numpy
 scipy
+shapely
