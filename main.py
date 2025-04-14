@@ -11,21 +11,19 @@ def index():
     return render_template("index.html")
 
 @app.route("/generate-pattern", methods=["POST"])
+@app.route("/generate-pattern", methods=["POST"])
 def generate():
-    try:
-        if request.is_json:
-            # JSON API call
-            data = request.get_json()
-            object_list = data.get("objects", [])
-            include_straps = data.get("include_straps", False)
-        else:
-            # HTML form submission
-            object_list = request.form.getlist("objects")
-            include_straps = bool(request.form.get("include_straps"))
+    data = request.get_json()
+    object_list = data.get("objects", [])
+    include_straps = data.get("include_straps", False)
 
-        # Generate SVG pattern
+    try:
         output_path = generate_pattern_svg(object_list, include_straps)
-        return send_file(output_path, as_attachment=True)
+        return jsonify({"svg_url": "/download-pattern"})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()  # This will show the full stack trace in the Fly.io logs
+        return jsonify({"error": str(e)}), 500
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
