@@ -35,41 +35,57 @@ def generate_pattern_svg(object_list, include_seam_allowance=False, return_strin
     combined = np.vstack(all_vertices)
 
     # Compute alpha shape (concave hull) for shrinkwrap effect
-    alpha = 0.2 * np.linalg.norm(combined.max(axis=0) - combined.min(axis=0))
+    alpha = 0.2 * np.ptp(combined, axis=0).max()
     hull_shape = alphashape.alphashape(combined, alpha)
 
-    # Prepare for scaling and translation to center in SVG
-    canvas_size = 1000
+    if hull_shape is None:
+        raise ValueError("Alpha shape returned None")
+
+    # Prepare scaling
     minx, miny, maxx, maxy = hull_shape.bounds
     width = maxx - minx
     height = maxy - miny
-
-    scale = canvas_size / max(width, height)
+    canvas_size = 800
+    scale = canvas_size * 0.85 / max(width, height)  # Leave 15% margin
     dx = (canvas_size - width * scale) / 2
     dy = (canvas_size - height * scale) / 2
 
     def transform_coords(coords):
         return [((x - minx) * scale + dx, (y - miny) * scale + dy) for x, y in coords]
 
-    dwg = svgwrite.Drawing(output_path, profile='tiny', size=(f'{canvas_size}px', f'{canvas_size}px'))
+    dwg = svgwrite.Drawing(output_path, profile='tiny', size=(f"{canvas_size}px", f"{canvas_size}px"))
 
-    def draw_shape(shape, stroke='black', dash=None):
-        if isinstance(shape, Polygon):
-            exterior = transform_coords(shape.exterior.coords)
-            dwg.add(dwg.polygon(points=exterior, stroke=stroke, fill='none',
-                                stroke_dasharray=dash if dash else None, stroke_width=2))
-        elif isinstance(shape, MultiPolygon):
-            for poly in shape.geoms:
-                exterior = transform_coords(poly.exterior.coords)
-                dwg.add(dwg.polygon(points=exterior, stroke=stroke, fill='none',
-                                    stroke_dasharray=dash if dash else None, stroke_width=2))
+    polygons = []
+    if isinstance(hull_shape, Polygon):
+        polygons = [hull_shape]
+    elif isinstance(hull_shape, MultiPolygon):
+        polygons = list(hull_shape.geoms)
 
-    draw_shape(hull_shape, stroke='black')
+    for poly in polygons:
+        dwg.add(dwg.polygon(
+            points=transform_coords(poly.exterior.coords),
+            stroke="black",
+            fill="none",
+            stroke_width=2
+        ))
 
-    if include_seam_allowance:
-        seam_offset = 10  # In the same units as your canvas
-        buffered_shape = hull_shape.buffer(seam_offset)
-        draw_shape(buffered_shape, stroke='red', dash="4,2")
+        if include_seam_allowance:
+            offset = poly.buffer(10)
+            if isinstance(offset, Polygon):
+                dwg.add(dwg.polygon(
+                    points=transform_coords(offset.exterior.coords),
+                    stroke="red",
+                    fill="none",
+                    stroke_dasharray="4,2"
+                ))
+            elif isinstance(offset, MultiPolygon):
+                for p in offset.geoms:
+                    dwg.add(dwg.polygon(
+                        points=transform_coords(p.exterior.coords),
+                        stroke="red",
+                        fill="none",
+                        stroke_dasharray="4,2"
+                    ))
 
     if return_string:
         return dwg.tostring()
