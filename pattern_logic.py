@@ -1,29 +1,71 @@
-import os
+import trimesh
+import numpy as np
 import svgwrite
-from utils import load_model_and_flatten
+import os
 
+MODEL_DIR = "models"
 OUTPUT_DIR = "patterns"
 
-def generate_pattern_svg(objects, include_straps=False):
-    filename = os.path.join(OUTPUT_DIR, "pattern.svg")
-    dwg = svgwrite.Drawing(filename, profile='tiny', size=("300mm", "300mm"))
+def load_mesh(filepath):
+    mesh = trimesh.load(filepath)
 
-    offset_x = 0
-    for obj in objects:
-        flattened = load_model_and_flatten(obj)
-        points = [(x + offset_x, y) for x, y in flattened]
-        dwg.add(dwg.polygon(points=points, stroke="black", fill="none", stroke_width=1))
-        if points:
-            dwg.add(dwg.text(obj, insert=(points[0][0], points[0][1] - 5)))
-        offset_x += 100
+    # Handle scene objects like those from GLB files
+    if isinstance(mesh, trimesh.Scene):
+        if not mesh.geometry:
+            raise ValueError(f"{filepath} loaded as empty Scene")
+        mesh = trimesh.util.concatenate(tuple(mesh.geometry.values()))
 
-    # Scale box
-    dwg.add(dwg.text("1cm scale box:", insert=(10, 290)))
-    dwg.add(dwg.rect(insert=(100, 280), size=(10, 10), stroke="black", fill="none"))
+    if mesh.is_empty:
+        raise ValueError(f"Mesh from {filepath} is empty")
 
+    return mesh
+
+def generate_pattern_svg(object_names, include_straps=False):
+    if not object_names:
+        raise ValueError("No objects selected")
+
+    meshes = []
+    for name in object_names:
+        filepath = os.path.join(MODEL_DIR, name + ".glb")
+        try:
+            mesh = load_mesh(filepath)
+            meshes.append(mesh)
+        except Exception as e:
+            print(f"Error loading {name}: {e}")
+            continue
+
+    if not meshes:
+        raise ValueError("No valid meshes could be loaded")
+
+    # Combine all meshes into one
+    full_mesh = trimesh.util.concatenate(meshes)
+
+    # Get bounding box for layout
+    bounds = full_mesh.bounds
+    width = bounds[1][0] - bounds[0][0]
+    height = bounds[1][1] - bounds[0][1]
+
+    # Convert to a simple flattened 2D projection
+    flat = full_mesh.copy()
+    flat.vertices[:, 2] = 0  # Flatten in Z direction
+
+    # Create SVG drawing
+    svg_path = os.path.join(OUTPUT_DIR, "pattern.svg")
+    dwg = svgwrite.Drawing(svg_path, size=(f"{width+100}mm", f"{height+100}mm"))
+
+    for face in flat.faces:
+        points = [flat.vertices[i][:2] for i in face]
+        dwg.add(dwg.polygon(points=points, fill="none", stroke="black"))
+
+    # Optional strap outline
     if include_straps:
-        dwg.add(dwg.rect(insert=(offset_x, 0), size=(20, 200), stroke="blue", fill="none"))
-        dwg.add(dwg.text("Strap", insert=(offset_x, 220)))
+        dwg.add(dwg.rect(insert=(10, 10), size=("100mm", "20mm"),
+                         fill="none", stroke="red"))
+    
+    # Labels for selected objects
+    for i, name in enumerate(object_names):
+        dwg.add(dwg.text(name, insert=(10, height + 40 + i * 20), fill="blue"))
 
+    # Save SVG file
     dwg.save()
-    return filename
+    return svg_path
