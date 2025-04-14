@@ -2,67 +2,80 @@ import os
 import svgwrite
 import trimesh
 import numpy as np
-from shapely.geometry import MultiPoint
-from shapely.ops import unary_union
 import alphashape
+from shapely.geometry import MultiPoint, Polygon, MultiPolygon
 
-def generate_pattern_svg(object_list, include_straps=False, return_string=False):
+def generate_pattern_svg(object_list, include_seam_allowance=False, return_string=False):
     OUTPUT_DIR = "patterns"
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     output_path = os.path.join(OUTPUT_DIR, "pattern.svg")
 
-    all_points = []
+    all_vertices = []
 
     for obj in object_list:
         file_path = os.path.join("models", f"{obj}.glb")
         print(f"Loading: {file_path}")
+
         try:
             mesh = trimesh.load(file_path)
             if isinstance(mesh, trimesh.Scene):
                 mesh = trimesh.util.concatenate(tuple(mesh.geometry.values()))
             if mesh.vertices.shape[0] == 0:
                 continue
-            mesh.vertices[:, 2] = 0
-            points = mesh.vertices[:, :2]
-            all_points.append(points)
+            mesh.vertices[:, 2] = 0  # Flatten to 2D
+            vertices = mesh.vertices[:, :2]
+            all_vertices.append(vertices)
         except Exception as e:
-            print(f"Error loading {obj}: {e}")
+            print(f"Failed to load {file_path}: {e}")
             continue
 
-    if not all_points:
-        raise ValueError("No valid objects loaded.")
+    if not all_vertices:
+        raise ValueError("No valid objects found")
 
-    all_points = np.concatenate(all_points)
-    all_points -= np.min(all_points, axis=0)
-    scale = 500 / np.max(all_points.max(axis=0))
-    all_points *= scale
+    combined = np.vstack(all_vertices)
+    scale = 5  # Adjust for SVG fit
+    combined -= combined.min(axis=0)
+    combined *= scale
 
-    hull_shape = alphashape.alphashape(all_points, alpha=1.5)
-    dwg = svgwrite.Drawing(output_path, profile='tiny', size=("800px", "800px"))
+    # Compute alpha shape (concave hull) for shrinkwrap effect
+    alpha = 0.2 * np.linalg.norm(combined.max(axis=0) - combined.min(axis=0))
+    hull_shape = alphashape.alphashape(combined, alpha)
 
-    # Draw shrinkwrap outline
-    if isinstance(hull_shape, MultiPoint):  # Fallback
-        hull_shape = hull_shape.convex_hull
+    dwg = svgwrite.Drawing(output_path, profile='tiny', size=('1000px', '1000px'))
 
-    hull_coords = list(hull_shape.exterior.coords)
-    dwg.add(dwg.polygon(
-        points=hull_coords,
-        stroke='black',
-        fill='none',
-        stroke_width=2
-    ))
+    if isinstance(hull_shape, Polygon):
+        polygons = [hull_shape]
+    elif isinstance(hull_shape, MultiPolygon):
+        polygons = list(hull_shape.geoms)
+    else:
+        raise ValueError("Could not create valid hull shape")
 
-    # Optional seam allowance (buffer)
-    seam_allowance = 10  # units
-    if include_straps:
-        seam = hull_shape.buffer(seam_allowance)
-        if hasattr(seam, "exterior"):
-            dwg.add(dwg.polygon(
-                points=list(seam.exterior.coords),
-                stroke='red',
-                fill='none',
-                stroke_dasharray="4,2"
-            ))
+    for poly in polygons:
+        points = np.array(poly.exterior.coords)
+        dwg.add(dwg.polygon(
+            points=[(x, y) for x, y in points],
+            stroke="black",
+            fill="none",
+            stroke_width=2
+        ))
+
+        if include_seam_allowance:
+            offset = poly.buffer(10)  # seam allowance
+            if isinstance(offset, Polygon):
+                dwg.add(dwg.polygon(
+                    points=[(x, y) for x, y in offset.exterior.coords],
+                    stroke="red",
+                    fill="none",
+                    stroke_dasharray="4,2"
+                ))
+            elif isinstance(offset, MultiPolygon):
+                for p in offset.geoms:
+                    dwg.add(dwg.polygon(
+                        points=[(x, y) for x, y in p.exterior.coords],
+                        stroke="red",
+                        fill="none",
+                        stroke_dasharray="4,2"
+                    ))
 
     if return_string:
         return dwg.tostring()
