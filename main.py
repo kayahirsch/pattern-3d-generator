@@ -18,7 +18,7 @@ def generate():
 
     try:
         svg_content = generate_pattern_svg(object_list, include_straps, return_string=True)
-        return svg_content, 200, {'Content-Type': 'image/svg+xml'}
+        return jsonify({"svg": svg_content})
     except Exception as e:
         import traceback
         traceback.print_exc()
