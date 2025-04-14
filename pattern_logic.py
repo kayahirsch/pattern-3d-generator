@@ -37,7 +37,7 @@ def generate_pattern_svg(object_list, include_seam_allowance=False, return_strin
     combined -= combined.mean(axis=0)  # Center around origin
 
     # Shrinkwrap shape
-    alpha = 0.2 * np.linalg.norm(combined.ptp(axis=0))  # better alpha guess
+    alpha = 0.2 * np.linalg.norm(np.ptp(combined, axis=0))
     hull_shape = alphashape.alphashape(combined, alpha)
 
     # Calculate bounds for scaling
