@@ -1,23 +1,51 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>3D-to-2D Pattern Generator</title>
+  <title>Bag Pattern Generator</title>
 </head>
 <body>
- <h1>🧵 Generate Your Custom Bag Pattern</h1>
-<form id="patternForm">
-  <p>Select items to include:</p>
+  <h1>🧵 Generate Your Custom Bag Pattern</h1>
 
-  <label><input type="checkbox" name="objects" value="phone"> Phone</label><br>
-  <label><input type="checkbox" name="objects" value="car_key"> Car Key</label><br>
-  <label><input type="checkbox" name="objects" value="hairbrush"> Hairbrush</label><br>
-  <label><input type="checkbox" name="objects" value="journal"> Journal</label><br>
-  <label><input type="checkbox" name="objects" value="lighter"> Lighter</label><br>
-  <label><input type="checkbox" name="objects" value="lipstick"> Lipstick</label><br>
-  <label><input type="checkbox" name="objects" value="sunglasses"> Sunglasses</label><br>
-  <label><input type="checkbox" name="objects" value="water_bottle"> Water Bottle</label><br>
+  <form id="patternForm">
+    <p>Select items to include:</p>
+    <input type="checkbox" name="objects" value="phone"> Phone<br>
+    <input type="checkbox" name="objects" value="journal"> Journal<br>
+    <input type="checkbox" name="objects" value="lipstick"> Lipstick<br>
+    <input type="checkbox" name="objects" value="water_bottle"> Water Bottle<br>
+    <input type="checkbox" name="objects" value="sunglasses"> Sunglasses<br>
+    <input type="checkbox" name="objects" value="lighter"> Lighter<br>
+    <input type="checkbox" name="objects" value="car_key"> Car Key<br>
+    <input type="checkbox" name="objects" value="hairbrush"> Hairbrush<br>
+    <br>
+    <label><input type="checkbox" name="include_straps"> Include straps</label>
+    <br><br>
+    <button type="submit">Generate Pattern</button>
+  </form>
 
-  <br><label><input type="checkbox" name="include_straps"> Include straps</label><br><br>
+  <script>
+    document.getElementById("patternForm").addEventListener("submit", function(e) {
+      e.preventDefault();
+      const formData = new FormData(e.target);
+      const selectedObjects = formData.getAll("objects");
+      const includeStraps = formData.get("include_straps") !== null;
 
-  <button type="submit">Generate Pattern</button>
-</form>
+      fetch("/generate-pattern", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          objects: selectedObjects,
+          include_straps: includeStraps
+        })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.svg_url) {
+          window.location.href = data.svg_url;
+        } else {
+          alert("Error: " + data.error);
+        }
+      });
+    });
+  </script>
+</body>
+</html>
