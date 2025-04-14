@@ -2,3 +2,4 @@ flask
 svgwrite
 trimesh
 numpy
+scipy
