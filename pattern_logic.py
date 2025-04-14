@@ -15,14 +15,13 @@ def generate_pattern_svg(object_list, include_seam_allowance=False, return_strin
     for obj in object_list:
         file_path = os.path.join("models", f"{obj}.glb")
         print(f"Loading: {file_path}")
-
         try:
             mesh = trimesh.load(file_path)
             if isinstance(mesh, trimesh.Scene):
                 mesh = trimesh.util.concatenate(tuple(mesh.geometry.values()))
             if mesh.vertices.shape[0] == 0:
                 continue
-            mesh.vertices[:, 2] = 0  # Flatten to 2D
+            mesh.vertices[:, 2] = 0
             vertices = mesh.vertices[:, :2]
             all_vertices.append(vertices)
         except Exception as e:
@@ -34,19 +33,19 @@ def generate_pattern_svg(object_list, include_seam_allowance=False, return_strin
 
     combined = np.vstack(all_vertices)
 
-    # Compute alpha shape (concave hull) for shrinkwrap effect
-    alpha = 0.2 * np.ptp(combined, axis=0).max()
+    # Compute alpha shape
+    alpha = 0.2 * np.linalg.norm(np.ptp(combined, axis=0))
     hull_shape = alphashape.alphashape(combined, alpha)
 
-    if hull_shape is None:
-        raise ValueError("Alpha shape returned None")
-
-    # Prepare scaling
+    # Set canvas size and padding
+    canvas_size = 1000
+    padding = 50
     minx, miny, maxx, maxy = hull_shape.bounds
     width = maxx - minx
     height = maxy - miny
-    canvas_size = 800
-    scale = canvas_size * 0.85 / max(width, height)  # Leave 15% margin
+
+    # Compute scale and offsets
+    scale = (canvas_size - 2 * padding) / max(width, height)
     dx = (canvas_size - width * scale) / 2
     dy = (canvas_size - height * scale) / 2
 
@@ -55,37 +54,40 @@ def generate_pattern_svg(object_list, include_seam_allowance=False, return_strin
 
     dwg = svgwrite.Drawing(output_path, profile='tiny', size=(f"{canvas_size}px", f"{canvas_size}px"))
 
-    polygons = []
     if isinstance(hull_shape, Polygon):
         polygons = [hull_shape]
     elif isinstance(hull_shape, MultiPolygon):
         polygons = list(hull_shape.geoms)
+    else:
+        raise ValueError("Could not create valid hull shape")
 
     for poly in polygons:
+        # Add seam allowance (draw first so it's behind)
+        if include_seam_allowance:
+            offset = poly.buffer(10)
+            if isinstance(offset, Polygon):
+                offset_polys = [offset]
+            elif isinstance(offset, MultiPolygon):
+                offset_polys = offset.geoms
+            else:
+                offset_polys = []
+
+            for p in offset_polys:
+                if not p.is_empty:
+                    dwg.add(dwg.polygon(
+                        points=transform_coords(p.exterior.coords),
+                        stroke="red",
+                        fill="none",
+                        stroke_dasharray="6,3"
+                    ))
+
+        # Main pattern outline
         dwg.add(dwg.polygon(
             points=transform_coords(poly.exterior.coords),
             stroke="black",
             fill="none",
             stroke_width=2
         ))
-
-        if include_seam_allowance:
-            offset = poly.buffer(10)
-            if isinstance(offset, Polygon):
-                dwg.add(dwg.polygon(
-                    points=transform_coords(offset.exterior.coords),
-                    stroke="red",
-                    fill="none",
-                    stroke_dasharray="4,2"
-                ))
-            elif isinstance(offset, MultiPolygon):
-                for p in offset.geoms:
-                    dwg.add(dwg.polygon(
-                        points=transform_coords(p.exterior.coords),
-                        stroke="red",
-                        fill="none",
-                        stroke_dasharray="4,2"
-                    ))
 
     if return_string:
         return dwg.tostring()
