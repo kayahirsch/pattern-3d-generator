@@ -32,53 +32,66 @@ def generate_pattern_svg(object_list, include_seam_allowance=False, return_strin
     if not all_vertices:
         raise ValueError("No valid objects found")
 
+    # Combine and scale vertices
     combined = np.vstack(all_vertices)
-    scale = 5  # Adjust for SVG fit
-    combined -= combined.min(axis=0)
-    combined *= scale
+    combined -= combined.min(axis=0)  # Normalize to start at (0,0)
 
-    # Compute alpha shape (concave hull) for shrinkwrap effect
+    # Generate alpha shape
     alpha = 0.2 * np.linalg.norm(combined.max(axis=0) - combined.min(axis=0))
     hull_shape = alphashape.alphashape(combined, alpha)
 
-    dwg = svgwrite.Drawing(output_path, profile='tiny', size=('1000px', '1000px'))
+    if hull_shape is None or hull_shape.is_empty:
+        raise ValueError("Could not compute a valid hull shape")
 
     if isinstance(hull_shape, Polygon):
         polygons = [hull_shape]
     elif isinstance(hull_shape, MultiPolygon):
         polygons = list(hull_shape.geoms)
     else:
-        raise ValueError("Could not create valid hull shape")
+        raise ValueError("Hull shape not recognized")
 
+    # SVG canvas setup
+    canvas_size = 800
+    minx, miny, maxx, maxy = hull_shape.bounds
+    width = maxx - minx
+    height = maxy - miny
+
+    scale = canvas_size / max(width, height)
+    dx = (canvas_size - width * scale) / 2
+    dy = (canvas_size - height * scale) / 2
+
+    def transform_coords(coords):
+        return [((x - minx) * scale + dx, (y - miny) * scale + dy) for x, y in coords]
+
+    dwg = svgwrite.Drawing(output_path, size=(canvas_size, canvas_size), profile='tiny')
+
+    # Draw main pattern
     for poly in polygons:
-        points = np.array(poly.exterior.coords)
+        points = transform_coords(poly.exterior.coords)
         dwg.add(dwg.polygon(
-            points=[(x, y) for x, y in points],
-            stroke="black",
-            fill="none",
+            points=points,
+            stroke='black',
+            fill='none',
             stroke_width=2
         ))
 
+        # Optional: Seam allowance
         if include_seam_allowance:
-            offset = poly.buffer(10)  # seam allowance
+            offset = poly.buffer(10)
             if isinstance(offset, Polygon):
                 dwg.add(dwg.polygon(
-                    points=[(x, y) for x, y in offset.exterior.coords],
-                    stroke="red",
-                    fill="none",
-                    stroke_dasharray="4,2"
+                    points=transform_coords(offset.exterior.coords),
+                    stroke='red',
+                    fill='none',
+                    stroke_dasharray='5,5'
                 ))
             elif isinstance(offset, MultiPolygon):
                 for p in offset.geoms:
                     dwg.add(dwg.polygon(
-                        points=[(x, y) for x, y in p.exterior.coords],
-                        stroke="red",
-                        fill="none",
-                        stroke_dasharray="4,2"
+                        points=transform_coords(p.exterior.coords),
+                        stroke='red',
+                        fill='none',
+                        stroke_dasharray='5,5'
                     ))
 
-    if return_string:
-        return dwg.tostring()
-    else:
-        dwg.save()
-        return output_path
+    return dwg.tostring() if return_string else dwg.save() or output_path
