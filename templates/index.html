@@ -4,19 +4,23 @@
   <title>3D-to-2D Pattern Generator</title>
 </head>
 <body>
-  <h1>🧵 Generate Your Custom Bag Pattern</h1>
-  <form action="/generate-pattern" method="post">
-    <label>Select items to include:</label><br>
-    <input type="checkbox" name="objects" value="phone"> Phone<br>
-    <input type="checkbox" name="objects" value="book"> Book<br>
-    <input type="checkbox" name="objects" value="lipstick"> Lipstick<br>
-    <input type="checkbox" name="objects" value="journal"> Journal<br><br>
+ <h1>🧵 Generate Your Custom Bag Pattern</h1>
+<form id="patternForm">
+  <p>Select items to include:</p>
 
-    <label>
-      <input type="checkbox" name="include_straps"> Include straps
-    </label><br><br>
+  <label><input type="checkbox" name="objects" value="phone"> Phone</label><br>
+  <label><input type="checkbox" name="objects" value="car_key"> Car Key</label><br>
+  <label><input type="checkbox" name="objects" value="hairbrush"> Hairbrush</label><br>
+  <label><input type="checkbox" name="objects" value="journal"> Journal</label><br>
+  <label><input type="checkbox" name="objects" value="lighter"> Lighter</label><br>
+  <label><input type="checkbox" name="objects" value="lipstick"> Lipstick</label><br>
+  <label><input type="checkbox" name="objects" value="sunglasses"> Sunglasses</label><br>
+  <label><input type="checkbox" name="objects" value="water_bottle"> Water Bottle</label><br>
 
-    <input type="submit" value="Generate Pattern">
-  </form>
+  <br><label><input type="checkbox" name="include_straps"> Include straps</label><br><br>
+
+  <button type="submit">Generate Pattern</button>
+</form>
+
 </body>
 </html>
