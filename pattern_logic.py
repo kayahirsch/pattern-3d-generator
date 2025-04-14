@@ -9,7 +9,7 @@ def generate_pattern_svg(object_list, include_straps=False, return_string=False)
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     output_path = os.path.join(OUTPUT_DIR, "pattern.svg")
 
-    meshes = []
+    all_vertices = []
 
     for obj in object_list:
         file_path = os.path.join("models", f"{obj}.glb")
@@ -19,62 +19,54 @@ def generate_pattern_svg(object_list, include_straps=False, return_string=False)
             mesh = trimesh.load(file_path)
             if isinstance(mesh, trimesh.Scene):
                 mesh = trimesh.util.concatenate(tuple(mesh.geometry.values()))
-            meshes.append(mesh)
+            if mesh.vertices.shape[0] == 0:
+                continue
+            mesh.vertices[:, 2] = 0
+            all_vertices.append(mesh.vertices[:, :2])
         except Exception as e:
             print(f"Error loading {file_path}: {e}")
+            import traceback
+            traceback.print_exc()
             continue
 
-    if not meshes:
-        raise ValueError("No valid meshes loaded.")
+    if not all_vertices:
+        raise ValueError("No valid meshes found.")
 
-    combined_mesh = trimesh.util.concatenate(meshes)
-    combined_mesh.vertices[:, 2] = 0
-    points_2d = combined_mesh.vertices[:, :2]
+    combined_vertices = np.vstack(all_vertices)
+    hull = ConvexHull(combined_vertices)
 
-    # Normalize and scale
-    min_corner = points_2d.min(axis=0)
-    max_corner = points_2d.max(axis=0)
+    min_corner = combined_vertices.min(axis=0)
+    max_corner = combined_vertices.max(axis=0)
     size = max_corner - min_corner
-    scale = 400 / np.max(size)
-    points_2d = (points_2d - min_corner) * scale
+    scale = 800 / np.max(size)
+    scaled_vertices = (combined_vertices - min_corner) * scale
 
-    # Create shrinkwrap pattern using ConvexHull
-    hull = ConvexHull(points_2d)
-    hull_points = points_2d[hull.vertices]
-
-    svg_size = (600, 600)
+    svg_size = (scaled_vertices[:, 0].max() + 200, scaled_vertices[:, 1].max() + 200)
     dwg = svgwrite.Drawing(output_path, profile='tiny', size=svg_size)
 
-    dwg.add(dwg.text(
-        "🧵 Your Custom Bag Pattern",
-        insert=(svg_size[0] / 2, 50),
-        text_anchor="middle",
-        font_size="24px",
-        font_weight="bold"
-    ))
-
-    # Add shrinkwrap outline
-    dwg.add(svgwrite.shapes.Polygon(
+    hull_points = scaled_vertices[hull.vertices]
+    dwg.add(dwg.polygon(
         points=[(pt[0] + 100, pt[1] + 100) for pt in hull_points],
         stroke='black',
         fill='none',
         stroke_width=2
     ))
 
-    # Optional strap indicators
     if include_straps:
-        strap_length = 60
-        strap_width = 10
-        x, y = hull_points[0]
-        dwg.add(svgwrite.shapes.Rect(
-            insert=(x + 100, y + 100 + 20),
-            size=(strap_width, strap_length),
-            fill='black'
+        centroid = hull_points.mean(axis=0) + 100
+        dwg.add(dwg.rect(
+            insert=(centroid[0] - 10, centroid[1] - 80),
+            size=(20, 60),
+            stroke='black',
+            fill='none',
+            stroke_dasharray="5,5"
         ))
-        dwg.add(svgwrite.shapes.Rect(
-            insert=(x + 180, y + 100 + 20),
-            size=(strap_width, strap_length),
-            fill='black'
+        dwg.add(dwg.rect(
+            insert=(centroid[0] - 10, centroid[1] + 20),
+            size=(20, 60),
+            stroke='black',
+            fill='none',
+            stroke_dasharray="5,5"
         ))
 
     if return_string:
