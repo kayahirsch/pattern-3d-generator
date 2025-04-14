@@ -14,10 +14,10 @@ def index():
 def generate():
     data = request.get_json()
     object_list = data.get("objects", [])
-    include_straps = data.get("include_straps", False)
+    include_seam_allowance = data.get("include_straps", False)  # still using 'include_straps' as the frontend key
 
     try:
-        svg_content = generate_pattern_svg(object_list, include_straps, return_string=True)
+        svg_content = generate_pattern_svg(object_list, include_seam_allowance, return_string=True)
         return jsonify({"svg": svg_content})
     except Exception as e:
         import traceback
