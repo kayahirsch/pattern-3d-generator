@@ -13,7 +13,8 @@ def generate_pattern_svg(objects, include_straps=False):
         flattened = load_model_and_flatten(obj)
         points = [(x + offset_x, y) for x, y in flattened]
         dwg.add(dwg.polygon(points=points, stroke="black", fill="none", stroke_width=1))
-        dwg.add(dwg.text(obj, insert=(points[0][0], points[0][1] - 5)))
+        if points:
+            dwg.add(dwg.text(obj, insert=(points[0][0], points[0][1] - 5)))
         offset_x += 100
 
     # Scale box
