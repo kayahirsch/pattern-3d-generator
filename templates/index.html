@@ -1,66 +1,51 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>🧵 Generate Your Custom Bag Pattern</title>
-  <style>
-    body {
-      font-family: sans-serif;
-      text-align: center;
-      padding: 30px;
-    }
-    .svg-container {
-      margin-top: 40px;
-      display: flex;
-      justify-content: center;
-    }
-    object {
-      width: 80vw;
-      height: 90vh;
-      border: 1px solid #ccc;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <title>3D Bag Pattern Generator</title>
 </head>
-<body>
-  <h1>🧵 Generate Your Custom Bag Pattern</h1>
-  <form id="pattern-form">
-    <p>Select items to include:</p>
-    <label><input type="checkbox" name="objects" value="phone"> Phone</label><br>
-    <label><input type="checkbox" name="objects" value="journal"> Journal</label><br>
-    <label><input type="checkbox" name="objects" value="lipstick"> Lipstick</label><br>
-    <label><input type="checkbox" name="objects" value="water_bottle"> Water Bottle</label><br>
-    <label><input type="checkbox" name="objects" value="sunglasses"> Sunglasses</label><br>
-    <label><input type="checkbox" name="objects" value="lighter"> Lighter</label><br>
-    <label><input type="checkbox" name="objects" value="car_key"> Car Key</label><br>
-    <label><input type="checkbox" name="objects" value="hairbrush"> Hairbrush</label><br><br>
-    <label><input type="checkbox" id="include_straps"> Include straps</label><br><br>
-    <button type="submit">Generate Pattern</button>
-  </form>
+<body style="text-align: center; font-family: sans-serif;">
+    <h1>Select Items to Include in Your Bag</h1>
+    <form id="patternForm">
+        <label><input type="checkbox" name="objects" value="phone"> Phone</label><br>
+        <label><input type="checkbox" name="objects" value="lipstick"> Lipstick</label><br>
+        <label><input type="checkbox" name="objects" value="hairbrush"> Hairbrush</label><br>
+        <label><input type="checkbox" name="objects" value="sunglasses"> Sunglasses</label><br>
+        <label><input type="checkbox" name="objects" value="journal"> Journal</label><br>
+        <label><input type="checkbox" name="objects" value="water_bottle"> Water Bottle</label><br>
+        <label><input type="checkbox" name="objects" value="passport"> Passport</label><br>
+        <label><input type="checkbox" name="objects" value="planner"> Planner</label><br>
+        <label><input type="checkbox" name="objects" value="charger_brick"> Charger Brick</label><br>
+        <label><input type="checkbox" name="objects" value="ipad_mini"> iPad Mini</label><br><br>
 
-  <div class="svg-container">
-    <object id="svg-display" type="image/svg+xml" data=""></object>
-  </div>
+        <label><input type="checkbox" name="include_straps"> Include Straps</label><br><br>
+        <button type="submit">Generate Pattern</button>
+    </form>
 
-  <script>
-    document.getElementById("pattern-form").addEventListener("submit", async (e) => {
-      e.preventDefault();
+    <div id="patternContainer" style="margin-top: 40px;"></div>
 
-      const checkboxes = document.querySelectorAll("input[name='objects']:checked");
-      const objects = Array.from(checkboxes).map(cb => cb.value);
-      const include_straps = document.getElementById("include_straps").checked;
+    <script>
+        document.getElementById('patternForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const checkboxes = document.querySelectorAll('input[name="objects"]:checked');
+            const objects = Array.from(checkboxes).map(cb => cb.value);
+            const include_straps = document.querySelector('input[name="include_straps"]').checked;
 
-      const response = await fetch("/generate-pattern", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ objects, include_straps })
-      });
-
-      const svgText = await response.text();
-      const svgObject = document.getElementById("svg-display");
-      const blob = new Blob([svgText], { type: "image/svg+xml" });
-      const url = URL.createObjectURL(blob);
-      svgObject.data = url;
-    });
-  </script>
+            fetch('/generate-pattern', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ objects: objects, include_straps: include_straps })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.svg) {
+                    document.getElementById('patternContainer').innerHTML =
+                        `<object type="image/svg+xml" data="data:image/svg+xml;base64,${btoa(data.svg)}" width="800"></object>`;
+                } else {
+                    document.getElementById('patternContainer').textContent = "Error: " + data.error;
+                }
+            });
+        });
+    </script>
 </body>
 </html>
