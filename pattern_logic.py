@@ -2,9 +2,9 @@ import os
 import svgwrite
 import trimesh
 import numpy as np
+from shapely.geometry import MultiPoint
+from shapely.ops import unary_union
 import alphashape
-from shapely.geometry import Polygon
-from shapely.affinity import scale as scale_polygon
 
 def generate_pattern_svg(object_list, include_straps=False, return_string=False):
     OUTPUT_DIR = "patterns"
@@ -20,51 +20,48 @@ def generate_pattern_svg(object_list, include_straps=False, return_string=False)
             mesh = trimesh.load(file_path)
             if isinstance(mesh, trimesh.Scene):
                 mesh = trimesh.util.concatenate(tuple(mesh.geometry.values()))
-            mesh.vertices[:, 2] = 0  # flatten
-            all_points.append(mesh.vertices[:, :2])
+            if mesh.vertices.shape[0] == 0:
+                continue
+            mesh.vertices[:, 2] = 0
+            points = mesh.vertices[:, :2]
+            all_points.append(points)
         except Exception as e:
-            print(f"Error loading {file_path}: {e}")
+            print(f"Error loading {obj}: {e}")
             continue
 
     if not all_points:
-        raise ValueError("No valid 3D models loaded.")
+        raise ValueError("No valid objects loaded.")
 
-    all_points = np.vstack(all_points)
-    min_corner = all_points.min(axis=0)
-    all_points -= min_corner
-
-    max_dim = 600  # max pattern width/height
-    size = all_points.max(axis=0)
-    scale = max_dim / np.max(size)
+    all_points = np.concatenate(all_points)
+    all_points -= np.min(all_points, axis=0)
+    scale = 500 / np.max(all_points.max(axis=0))
     all_points *= scale
 
-    # Create the alphashape (adjust alpha for smoothness)
-    alpha = 0.3
-    shape = alphashape.alphashape(all_points, alpha)
-    if shape.geom_type != 'Polygon':
-        raise ValueError("Alpha shape did not produce a polygon.")
+    hull_shape = alphashape.alphashape(all_points, alpha=1.5)
+    dwg = svgwrite.Drawing(output_path, profile='tiny', size=("800px", "800px"))
 
-    # Create SVG
-    dwg = svgwrite.Drawing(output_path, profile='tiny', size=(max_dim + 200, max_dim + 200))
+    # Draw shrinkwrap outline
+    if isinstance(hull_shape, MultiPoint):  # Fallback
+        hull_shape = hull_shape.convex_hull
 
-    # Draw bag outline
-    poly_pts = list(shape.exterior.coords)
+    hull_coords = list(hull_shape.exterior.coords)
     dwg.add(dwg.polygon(
-        points=[(x + 100, y + 100) for x, y in poly_pts],
+        points=hull_coords,
         stroke='black',
         fill='none',
         stroke_width=2
     ))
 
-    # Optional straps (top outline)
+    # Optional seam allowance (buffer)
+    seam_allowance = 10  # units
     if include_straps:
-        straps = scale_polygon(shape, xfact=0.8, yfact=0.1, origin='center')
-        if isinstance(straps, Polygon):
+        seam = hull_shape.buffer(seam_allowance)
+        if hasattr(seam, "exterior"):
             dwg.add(dwg.polygon(
-                points=[(x + 100, y + 100) for x, y in straps.exterior.coords],
-                stroke='blue',
+                points=list(seam.exterior.coords),
+                stroke='red',
                 fill='none',
-                stroke_dasharray="5,5"
+                stroke_dasharray="4,2"
             ))
 
     if return_string:
