@@ -8,25 +8,25 @@ def generate_pattern_svg(object_list, include_straps=False):
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     output_path = os.path.join(OUTPUT_DIR, "pattern.svg")
 
-meshes = []
+    meshes = []
 
-for obj in object_list:
-    file_path = os.path.join("models", f"{obj}.glb")
-    print(f"Attempting to load: {file_path}")  # Debugging line
+    for obj in object_list:
+        file_path = os.path.join("models", f"{obj}.glb")
+        print(f"Attempting to load: {file_path}")  # Debugging line
 
-    try:
-        mesh = trimesh.load(file_path)
-        
-        # Handle scene objects (multi-part .glb files)
-        if isinstance(mesh, trimesh.Scene):
-            mesh = trimesh.util.concatenate(tuple(mesh.geometry.values()))
-        
-        meshes.append((mesh, obj))  # Keep mesh + label
-    except Exception as e:
-        print(f"Error loading {file_path}: {e}")  # Debug print
-        import traceback
-        traceback.print_exc()
-        continue  # Skip broken file and continue
+        try:
+            mesh = trimesh.load(file_path)
+
+            # Handle scene objects (multi-part .glb files)
+            if isinstance(mesh, trimesh.Scene):
+                mesh = trimesh.util.concatenate(tuple(mesh.geometry.values()))
+
+            meshes.append((mesh, obj))  # Keep mesh + label
+        except Exception as e:
+            print(f"Error loading {file_path}: {e}")  # Debug print
+            import traceback
+            traceback.print_exc()
+            continue  # Skip broken file and continue
 
     spacing = 150
     max_dim = 100
