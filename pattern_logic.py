@@ -1,71 +1,85 @@
+import os
+import svgwrite
 import trimesh
 import numpy as np
-import svgwrite
-import os
 
-MODEL_DIR = "models"
-OUTPUT_DIR = "patterns"
-
-def load_mesh(filepath):
-    mesh = trimesh.load(filepath)
-
-    # Handle scene objects like those from GLB files
-    if isinstance(mesh, trimesh.Scene):
-        if not mesh.geometry:
-            raise ValueError(f"{filepath} loaded as empty Scene")
-        mesh = trimesh.util.concatenate(tuple(mesh.geometry.values()))
-
-    if mesh.is_empty:
-        raise ValueError(f"Mesh from {filepath} is empty")
-
-    return mesh
-
-def generate_pattern_svg(object_names, include_straps=False):
-    if not object_names:
-        raise ValueError("No objects selected")
+def generate_pattern_svg(object_list, include_straps=False):
+    OUTPUT_DIR = "patterns"
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    output_path = os.path.join(OUTPUT_DIR, "pattern.svg")
 
     meshes = []
-    for name in object_names:
-        filepath = os.path.join(MODEL_DIR, name + ".glb")
-        try:
-            mesh = load_mesh(filepath)
-            meshes.append(mesh)
-        except Exception as e:
-            print(f"Error loading {name}: {e}")
+    for obj in object_list:
+        file_path = os.path.join("models", f"{obj}.glb")
+        if not os.path.isfile(file_path):
+            raise FileNotFoundError(f"Model file not found: {file_path}")
+        mesh = trimesh.load(file_path)
+        if isinstance(mesh, trimesh.Scene):
+            mesh = trimesh.util.concatenate(tuple(mesh.geometry.values()))
+        meshes.append((mesh, obj))
+
+    spacing = 150
+    max_dim = 100
+    margin = 100
+    cell_width = max_dim + spacing
+    num_cols = 3
+
+    processed = []
+    for mesh, label in meshes:
+        if mesh.vertices.shape[0] == 0:
             continue
+        mesh.vertices[:, 2] = 0
+        vertices = mesh.vertices[:, :2]
 
-    if not meshes:
-        raise ValueError("No valid meshes could be loaded")
+        min_corner = vertices.min(axis=0)
+        max_corner = vertices.max(axis=0)
+        size = max_corner - min_corner
+        scale = max_dim / np.max(size)
+        vertices = (vertices - min_corner) * scale
 
-    # Combine all meshes into one
-    full_mesh = trimesh.util.concatenate(meshes)
+        processed.append((vertices, mesh.faces, label, size * scale))
 
-    # Get bounding box for layout
-    bounds = full_mesh.bounds
-    width = bounds[1][0] - bounds[0][0]
-    height = bounds[1][1] - bounds[0][1]
+    num_items = len(processed)
+    num_rows = (num_items + num_cols - 1) // num_cols
+    svg_width = num_cols * cell_width
+    svg_height = num_rows * cell_width
 
-    # Convert to a simple flattened 2D projection
-    flat = full_mesh.copy()
-    flat.vertices[:, 2] = 0  # Flatten in Z direction
+    dwg = svgwrite.Drawing(output_path, profile='tiny', size=(svg_width + 2 * margin, svg_height + 2 * margin))
 
-    # Create SVG drawing
-    svg_path = os.path.join(OUTPUT_DIR, "pattern.svg")
-    dwg = svgwrite.Drawing(svg_path, size=(f"{width+100}mm", f"{height+100}mm"))
+    # Add title at top center
+    dwg.add(dwg.text(
+        "🧵 Your Custom Bag Layout",
+        insert=(svg_width / 2 + margin, 50),
+        text_anchor="middle",
+        font_size="28px",
+        font_weight="bold",
+        fill="black"
+    ))
 
-    for face in flat.faces:
-        points = [flat.vertices[i][:2] for i in face]
-        dwg.add(dwg.polygon(points=points, fill="none", stroke="black"))
+    # Draw items
+    for idx, (vertices, faces, label, scaled_size) in enumerate(processed):
+        col = idx % num_cols
+        row = idx // num_cols
 
-    # Optional strap outline
-    if include_straps:
-        dwg.add(dwg.rect(insert=(10, 10), size=("100mm", "20mm"),
-                         fill="none", stroke="red"))
-    
-    # Labels for selected objects
-    for i, name in enumerate(object_names):
-        dwg.add(dwg.text(name, insert=(10, height + 40 + i * 20), fill="blue"))
+        x0 = margin + col * cell_width + (max_dim - scaled_size[0]) / 2
+        y0 = margin + row * cell_width + (max_dim - scaled_size[1]) / 2 + 60  # +60 to leave room for the title
 
-    # Save SVG file
+        offset_vertices = vertices + np.array([x0, y0])
+
+        for face in faces:
+            pts = offset_vertices[face]
+            dwg.add(svgwrite.shapes.Polygon(
+                points=[(pt[0], pt[1]) for pt in pts],
+                stroke='black',
+                fill='none'
+            ))
+
+        dwg.add(dwg.text(
+            label,
+            insert=(x0, y0 + scaled_size[1] + 20),
+            font_size="16px",
+            fill="blue"
+        ))
+
     dwg.save()
-    return svg_path
+    return output_path
