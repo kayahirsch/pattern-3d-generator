@@ -1,4 +1,4 @@
-from flask import Flask, request, send_file, jsonify, render_template
+from flask import Flask, request, jsonify, render_template
 from pattern_logic import generate_pattern_svg
 import os
 
@@ -11,27 +11,18 @@ def index():
     return render_template("index.html")
 
 @app.route("/generate-pattern", methods=["POST"])
-@app.route("/generate-pattern", methods=["POST"])
 def generate():
     data = request.get_json()
     object_list = data.get("objects", [])
     include_straps = data.get("include_straps", False)
 
     try:
-        output_path = generate_pattern_svg(object_list, include_straps)
-        return jsonify({"svg_url": "/download-pattern"})
+        svg_content = generate_pattern_svg(object_list, include_straps, return_string=True)
+        return svg_content, 200, {'Content-Type': 'image/svg+xml'}
     except Exception as e:
         import traceback
-        traceback.print_exc()  # This will show the full stack trace in the Fly.io logs
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-# Optional separate download route
-@app.route("/download-pattern")
-def download():
-    return send_file(os.path.join(OUTPUT_DIR, "pattern.svg"), as_attachment=True)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
