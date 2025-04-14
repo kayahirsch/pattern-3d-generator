@@ -4,3 +4,4 @@ trimesh
 numpy
 scipy
 shapely
+alphashape
