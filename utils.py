@@ -9,6 +9,15 @@ def load_model_and_flatten(obj_name):
     if isinstance(mesh, trimesh.Scene):
         mesh = trimesh.util.concatenate(tuple(mesh.geometry.values()))
 
-    projection = mesh.vertices[:, :2]  # drop z-axis
-    hull = trimesh.Trimesh(projection).convex_hull
-    return [(float(x), float(y)) for x, y in hull.vertices]
+    # Safety check: if mesh is empty, return empty list
+    if mesh.is_empty or mesh.vertices.shape[0] == 0:
+        return []
+
+    # 3D to 2D (drop z-axis)
+    projection = mesh.vertices[:, :2]
+    
+    try:
+        hull = trimesh.Trimesh(projection).convex_hull
+        return [(float(x), float(y)) for x, y in hull.vertices]
+    except:
+        return []
