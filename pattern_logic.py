@@ -34,59 +34,60 @@ def generate_pattern_svg(object_list, include_seam_allowance=False, return_strin
 
     combined = np.vstack(all_vertices)
 
-    # Compute alpha shape (concave hull)
-    alpha = 0.2 * np.linalg.norm(combined.max(axis=0) - combined.min(axis=0))
+    # Generate alpha shape (concave hull)
+    alpha = 0.2 * np.linalg.norm(np.ptp(combined, axis=0))
     hull_shape = alphashape.alphashape(combined, alpha)
 
     if hull_shape is None:
         raise ValueError("Failed to generate a hull shape.")
 
+    # SVG canvas setup
     canvas_size = 1000
     padding = 50
     dwg = svgwrite.Drawing(output_path, profile='tiny', size=(f"{canvas_size}px", f"{canvas_size}px"))
 
-    # Fit shape to canvas
+    # Compute bounding box and scale
     minx, miny, maxx, maxy = hull_shape.bounds
     width = maxx - minx
     height = maxy - miny
     scale = (canvas_size - 2 * padding) / max(width, height)
-    dx = (canvas_size - width * scale) / 2
-    dy = (canvas_size - height * scale) / 2
+    dx = padding - minx * scale
+    dy = padding - miny * scale
 
     def transform_coords(coords):
-        return [((x - minx) * scale + dx, (y - miny) * scale + dy) for x, y in coords]
+        return [((x * scale) + dx, (y * scale) + dy) for x, y in coords]
 
+    # Normalize to list of polygons
     if isinstance(hull_shape, Polygon):
         polygons = [hull_shape]
     elif isinstance(hull_shape, MultiPolygon):
         polygons = list(hull_shape.geoms)
     else:
-        raise ValueError("Could not create valid hull shape")
+        raise ValueError("Hull shape is not a valid Polygon or MultiPolygon")
 
     for poly in polygons:
-        # Draw seam allowance first
+        # Optional seam allowance
         if include_seam_allowance:
-            offset = poly.buffer(10)
-            if isinstance(offset, Polygon):
-                offset_polys = [offset]
-            elif isinstance(offset, MultiPolygon):
-                offset_polys = list(offset.geoms)
+            seam = poly.buffer(10)
+            if isinstance(seam, Polygon):
+                seam_polys = [seam]
+            elif isinstance(seam, MultiPolygon):
+                seam_polys = list(seam.geoms)
             else:
-                offset_polys = []
+                seam_polys = []
 
-            for p in offset_polys:
+            for sp in seam_polys:
                 dwg.add(dwg.polygon(
-                    points=transform_coords(p.exterior.coords),
+                    points=transform_coords(sp.exterior.coords),
                     stroke="red",
                     fill="none",
                     stroke_dasharray="6,3",
                     stroke_width=1
                 ))
 
-        # Draw main outline
-        points = np.array(poly.exterior.coords)
+        # Main pattern outline
         dwg.add(dwg.polygon(
-            points=transform_coords(points),
+            points=transform_coords(poly.exterior.coords),
             stroke="black",
             fill="none",
             stroke_width=2
