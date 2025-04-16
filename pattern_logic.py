@@ -15,7 +15,6 @@ def generate_pattern_svg(object_list, include_seam_allowance=False, return_strin
     for obj in object_list:
         file_path = os.path.join("models", f"{obj}.glb")
         print(f"Loading: {file_path}")
-
         try:
             mesh = trimesh.load(file_path)
             if isinstance(mesh, trimesh.Scene):
@@ -34,44 +33,39 @@ def generate_pattern_svg(object_list, include_seam_allowance=False, return_strin
 
     combined = np.vstack(all_vertices)
 
-    # Compute alpha shape
+    # Compute concave hull
     alpha = 0.2 * np.linalg.norm(np.ptp(combined, axis=0))
-    hull_shape = alphashape.alphashape(combined, alpha)
-    if hull_shape is None:
+    hull = alphashape.alphashape(combined, alpha)
+    if hull is None:
         raise ValueError("Failed to generate hull.")
 
-    # If seam allowance is on, expand shape now so we can scale both it and the main shape properly
-    draw_shape = hull_shape
-    if include_seam_allowance:
-        draw_shape = hull_shape.buffer(buffer_size)
+    # Draw shape: the one we use to define scaling and canvas fit
+    draw_shape = hull.buffer(buffer_size) if include_seam_allowance else hull
 
-    # Canvas setup
+    # Canvas
     canvas_size = 1200
     padding = 100
     dwg = svgwrite.Drawing(output_path, profile='tiny', size=(f"{canvas_size}px", f"{canvas_size}px"))
 
-    # Compute scaling from draw_shape bounds
+    # Fit draw_shape to canvas
     minx, miny, maxx, maxy = draw_shape.bounds
     shape_width = maxx - minx
     shape_height = maxy - miny
-    scale_x = (canvas_size - 2 * padding) / shape_width
-    scale_y = (canvas_size - 2 * padding) / shape_height
-    scale = min(scale_x, scale_y)
-
+    scale = min((canvas_size - 2 * padding) / shape_width, (canvas_size - 2 * padding) / shape_height)
     translate_x = (canvas_size - shape_width * scale) / 2 - minx * scale
     translate_y = (canvas_size - shape_height * scale) / 2 - miny * scale
 
     def transform(coords):
         return [((x * scale) + translate_x, (y * scale) + translate_y) for x, y in coords]
 
-    # Split MultiPolygon or handle Polygon
-    polygons = [hull_shape] if isinstance(hull_shape, Polygon) else list(hull_shape.geoms)
+    # Split polygons
+    polygons = [hull] if isinstance(hull, Polygon) else list(hull.geoms)
 
     for poly in polygons:
         if include_seam_allowance:
-            offset = poly.buffer(buffer_size)
-            offset_polys = [offset] if isinstance(offset, Polygon) else list(offset.geoms)
-            for p in offset_polys:
+            expanded = poly.buffer(buffer_size)
+            seam_polys = [expanded] if isinstance(expanded, Polygon) else list(expanded.geoms)
+            for p in seam_polys:
                 dwg.add(dwg.polygon(
                     points=transform(p.exterior.coords),
                     stroke="red",
@@ -80,6 +74,7 @@ def generate_pattern_svg(object_list, include_seam_allowance=False, return_strin
                     stroke_width=1
                 ))
 
+        # Main black outline
         dwg.add(dwg.polygon(
             points=transform(poly.exterior.coords),
             stroke="black",
