@@ -34,19 +34,19 @@ def generate_pattern_svg(object_list, include_seam_allowance=False, return_strin
 
     combined = np.vstack(all_vertices)
 
-    # Generate alpha shape (concave hull)
+    # Compute alpha shape (concave hull)
     alpha = 0.2 * np.linalg.norm(np.ptp(combined, axis=0))
     hull_shape = alphashape.alphashape(combined, alpha)
 
     if hull_shape is None:
         raise ValueError("Failed to generate a hull shape.")
 
-    # SVG canvas setup
-    canvas_size = 1000
-    padding = 50
+    # Updated canvas settings
+    canvas_size = 1500
+    padding = 100
     dwg = svgwrite.Drawing(output_path, profile='tiny', size=(f"{canvas_size}px", f"{canvas_size}px"))
 
-    # Compute bounding box and scale
+    # Scale to fit with padding
     minx, miny, maxx, maxy = hull_shape.bounds
     width = maxx - minx
     height = maxy - miny
