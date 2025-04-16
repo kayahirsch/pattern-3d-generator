@@ -28,9 +28,11 @@
         #svg-container {
             margin-top: 40px;
             border: 1px solid #ccc;
-            width: 80%;
-            height: 600px;
+            width: 100%;
+            height: 1000px;
+            max-height: 90vh;
         }
+
     </style>
 </head>
 <body>
@@ -52,7 +54,7 @@
     </div>
     <button onclick="generatePattern()">Generate Pattern</button>
 
-    <object id="svg-container" type="image/svg+xml"></object>
+    <embed id="svg-container" type="image/svg+xml" style="width:100%; height:90vh; border:1px solid #ccc;" />
 
     <script>
         async function generatePattern() {
@@ -80,7 +82,7 @@
             const svg = data.svg;
             const blob = new Blob([svg], { type: "image/svg+xml" });
             const url = URL.createObjectURL(blob);
-            document.getElementById("svg-container").data = url;
+            document.getElementById("svg-container").src = url;
         }
     </script>
 </body>
