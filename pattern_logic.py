@@ -3,7 +3,7 @@ import svgwrite
 import trimesh
 import numpy as np
 import alphashape
-from shapely.geometry import MultiPoint, Polygon, MultiPolygon
+from shapely.geometry import Polygon, MultiPolygon
 
 def generate_pattern_svg(object_list, include_seam_allowance=False, return_string=False):
     OUTPUT_DIR = "patterns"
@@ -34,67 +34,61 @@ def generate_pattern_svg(object_list, include_seam_allowance=False, return_strin
 
     combined = np.vstack(all_vertices)
 
-    # Compute alpha shape (concave hull)
+    # Compute concave hull
     alpha = 0.2 * np.linalg.norm(np.ptp(combined, axis=0))
     hull_shape = alphashape.alphashape(combined, alpha)
-
     if hull_shape is None:
-        raise ValueError("Failed to generate a hull shape.")
+        raise ValueError("Failed to generate hull.")
 
-    # Updated canvas settings
-    canvas_size = 1500
+    # Canvas settings
+    canvas_size = 1200
     padding = 100
     dwg = svgwrite.Drawing(output_path, profile='tiny', size=(f"{canvas_size}px", f"{canvas_size}px"))
 
-    # Scale to fit with padding
+    # Get bounds of shape
     minx, miny, maxx, maxy = hull_shape.bounds
-    width = maxx - minx
-    height = maxy - miny
-    scale = (canvas_size - 2 * padding) / max(width, height)
-    dx = padding - minx * scale
-    dy = padding - miny * scale
+    shape_width = maxx - minx
+    shape_height = maxy - miny
 
-    def transform_coords(coords):
-        return [((x * scale) + dx, (y * scale) + dy) for x, y in coords]
+    # Determine scale to fit within canvas (consider padding)
+    scale_x = (canvas_size - 2 * padding) / shape_width
+    scale_y = (canvas_size - 2 * padding) / shape_height
+    scale = min(scale_x, scale_y)
 
-    # Normalize to list of polygons
+    # Translate to center
+    translate_x = (canvas_size - shape_width * scale) / 2 - minx * scale
+    translate_y = (canvas_size - shape_height * scale) / 2 - miny * scale
+
+    def transform(coords):
+        return [((x * scale) + translate_x, (y * scale) + translate_y) for x, y in coords]
+
     if isinstance(hull_shape, Polygon):
-        polygons = [hull_shape]
+        polys = [hull_shape]
     elif isinstance(hull_shape, MultiPolygon):
-        polygons = list(hull_shape.geoms)
+        polys = list(hull_shape.geoms)
     else:
-        raise ValueError("Hull shape is not a valid Polygon or MultiPolygon")
+        raise ValueError("Invalid geometry")
 
-    for poly in polygons:
-        # Optional seam allowance
+    for poly in polys:
+        # Optional seam allowance (red dashed)
         if include_seam_allowance:
-            seam = poly.buffer(10)
-            if isinstance(seam, Polygon):
-                seam_polys = [seam]
-            elif isinstance(seam, MultiPolygon):
-                seam_polys = list(seam.geoms)
-            else:
-                seam_polys = []
-
-            for sp in seam_polys:
+            offset = poly.buffer(10)
+            offset_polys = [offset] if isinstance(offset, Polygon) else list(offset.geoms)
+            for op in offset_polys:
                 dwg.add(dwg.polygon(
-                    points=transform_coords(sp.exterior.coords),
+                    points=transform(op.exterior.coords),
                     stroke="red",
                     fill="none",
                     stroke_dasharray="6,3",
                     stroke_width=1
                 ))
 
-        # Main pattern outline
+        # Main shape outline (black solid)
         dwg.add(dwg.polygon(
-            points=transform_coords(poly.exterior.coords),
+            points=transform(poly.exterior.coords),
             stroke="black",
             fill="none",
             stroke_width=2
         ))
 
-    if return_string:
-        return dwg.tostring()
-    else:
-        dwg.save()
-        return output_path
+    return dwg.tostring() if return_string else dwg.save()
