@@ -39,44 +39,48 @@ def generate_pattern_svg(object_list, include_seam_allowance=False, return_strin
     if hull is None:
         raise ValueError("Failed to generate hull.")
 
-    # Draw shape: the one we use to define scaling and canvas fit
-    draw_shape = hull.buffer(buffer_size) if include_seam_allowance else hull
-
     # Canvas
     canvas_size = 1200
-    padding = 100
+    visual_padding = 80  # in pixels
     dwg = svgwrite.Drawing(output_path, profile='tiny', size=(f"{canvas_size}px", f"{canvas_size}px"))
 
-    # Fit draw_shape to canvas
-    minx, miny, maxx, maxy = draw_shape.bounds
+    # The shape we use to scale and center must include seam allowance if toggled
+    full_shape = hull.buffer(buffer_size) if include_seam_allowance else hull
+
+    minx, miny, maxx, maxy = full_shape.bounds
     shape_width = maxx - minx
     shape_height = maxy - miny
-    scale = min((canvas_size - 2 * padding) / shape_width, (canvas_size - 2 * padding) / shape_height)
-    translate_x = (canvas_size - shape_width * scale) / 2 - minx * scale
-    translate_y = (canvas_size - shape_height * scale) / 2 - miny * scale
 
-    def transform(coords):
-        return [((x * scale) + translate_x, (y * scale) + translate_y) for x, y in coords]
+    scale = min(
+        (canvas_size - 2 * visual_padding) / shape_width,
+        (canvas_size - 2 * visual_padding) / shape_height
+    )
 
-    # Split polygons
-    polygons = [hull] if isinstance(hull, Polygon) else list(hull.geoms)
+    def transform_coords(coords):
+        return [(
+            (x - minx) * scale + visual_padding,
+            (y - miny) * scale + visual_padding
+        ) for x, y in coords]
 
-    for poly in polygons:
+    # Split polys
+    polys = [hull] if isinstance(hull, Polygon) else list(hull.geoms)
+
+    for poly in polys:
         if include_seam_allowance:
-            expanded = poly.buffer(buffer_size)
-            seam_polys = [expanded] if isinstance(expanded, Polygon) else list(expanded.geoms)
+            buffered = poly.buffer(buffer_size)
+            seam_polys = [buffered] if isinstance(buffered, Polygon) else list(buffered.geoms)
             for p in seam_polys:
                 dwg.add(dwg.polygon(
-                    points=transform(p.exterior.coords),
+                    points=transform_coords(p.exterior.coords),
                     stroke="red",
                     fill="none",
                     stroke_dasharray="6,3",
                     stroke_width=1
                 ))
 
-        # Main black outline
+        # Original black outline
         dwg.add(dwg.polygon(
-            points=transform(poly.exterior.coords),
+            points=transform_coords(poly.exterior.coords),
             stroke="black",
             fill="none",
             stroke_width=2
